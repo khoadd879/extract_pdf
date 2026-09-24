@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractPdfPages, PdfExtractionError } from "@/lib/pdf-extractor";
 import { classifyAndExtractMetadata } from "@/lib/document-classifier";
+import { parseDocumentLineItems } from "@/lib/line-parser";
+import { validateExtraction } from "@/lib/validators";
 import { ExtractionResult, Refusal } from "@/lib/types";
 
 const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Binary Extraction
+    // 3. Binary Extraction (Page-by-page)
     const arrayBuffer = await file.arrayBuffer();
     const buffer = new Uint8Array(arrayBuffer);
 
@@ -69,9 +71,23 @@ export async function POST(req: NextRequest) {
         pageNumber: 1,
         sourceText: null,
       });
+
+      const result: ExtractionResult = {
+        fileName: file.name,
+        totalPages: pdfData.totalPages,
+        metadata,
+        extractedItems: [],
+        refusals,
+        totals: null,
+        hasSelectableText: false,
+        processingTimeMs: Date.now() - startTime,
+        extractedAt: new Date().toISOString(),
+      };
+
+      return NextResponse.json(result, { status: 200 });
     }
 
-    // Check for empty pages in multi-page documents (e.g. IB-STMT47 page 4)
+    // 5. Blank page check in multi-page documents (e.g. IB-STMT47 page 4)
     if (pdfData.totalPages > 1) {
       for (const page of pdfData.pages) {
         if (page.charCount === 0) {
@@ -86,13 +102,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 6. Line Item Parsing with Error Isolation
+    const { items: extractedItems, refusals: parseRefusals, totals } = parseDocumentLineItems(pdfData.pages);
+    refusals.push(...parseRefusals);
+
+    // 7. Validation & Contradiction Detection
+    const { refusals: validationRefusals } = validateExtraction(
+      extractedItems,
+      metadata,
+      totals,
+      pdfData.pages
+    );
+    refusals.push(...validationRefusals);
+
     const result: ExtractionResult = {
       fileName: file.name,
       totalPages: pdfData.totalPages,
       metadata,
-      extractedItems: [],
+      extractedItems,
       refusals,
-      totals: null,
+      totals,
       hasSelectableText: pdfData.hasSelectableText,
       processingTimeMs: Date.now() - startTime,
       extractedAt: new Date().toISOString(),
