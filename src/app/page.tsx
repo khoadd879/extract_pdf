@@ -7,7 +7,14 @@ import { LineItemsTable } from "@/components/LineItemsTable";
 import { RefusalList } from "@/components/RefusalList";
 import { LoadingState } from "@/components/LoadingState";
 import { ExtractionResult } from "@/lib/types";
-import { ShieldCheck, AlertCircle, FileSpreadsheet, RotateCcw } from "lucide-react";
+import { exportToCsv, exportToJson } from "@/lib/export-utils";
+import {
+  ShieldCheck,
+  AlertCircle,
+  FileSpreadsheet,
+  FileCode,
+  RotateCcw,
+} from "lucide-react";
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
@@ -133,19 +140,39 @@ export default function Home() {
         {/* Results Presentation Area */}
         {result && (
           <section className="space-y-6 animate-in fade-in duration-300">
-            {/* Action Bar */}
-            <div className="flex items-center justify-between">
+            {/* Action Bar with Exports */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 Takeoff Audit Report
               </h3>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-2xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Upload Another Document
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => exportToCsv(result)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-2xs transition-colors cursor-pointer"
+                  title="Download line items and refusals as CSV"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportToJson(result)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-2xs transition-colors cursor-pointer"
+                  title="Download complete structured extraction payload as JSON"
+                >
+                  <FileCode className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  Export JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ml-1"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset
+                </button>
+              </div>
             </div>
 
             {/* Document Metadata Card */}
