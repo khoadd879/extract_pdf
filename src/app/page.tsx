@@ -1,69 +1,184 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState } from "react";
+import { FileUpload } from "@/components/FileUpload";
+import { DocumentInfo } from "@/components/DocumentInfo";
+import { LineItemsTable } from "@/components/LineItemsTable";
+import { RefusalList } from "@/components/RefusalList";
+import { LoadingState } from "@/components/LoadingState";
+import { ExtractionResult } from "@/lib/types";
+import { ShieldCheck, AlertCircle, FileSpreadsheet, RotateCcw } from "lucide-react";
 
 export default function Home() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<ExtractionResult | null>(null);
+  const [apiError, setApiError] = useState<{ error: string; detail: string } | null>(null);
+
+  const handleUpload = async (file: File) => {
+    setIsLoading(true);
+    setApiError(null);
+    setResult(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/extract", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Never collapse errors into "An error occurred"
+        setApiError({
+          error: data.error || `HTTP ${res.status} Error`,
+          detail: data.detail || "The extraction service encountered an issue processing this document.",
+        });
+      } else {
+        setResult(data as ExtractionResult);
+      }
+    } catch (err: unknown) {
+      // Network or fetch failure with specific explanation
+      setApiError({
+        error: "Network Connection Failure",
+        detail:
+          err instanceof Error
+            ? `Failed to communicate with extraction endpoint: ${err.message}`
+            : "The browser could not establish a connection with the extraction service.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReset = () => {
+    setResult(null);
+    setApiError(null);
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 flex flex-col font-sans">
+      {/* Top Navigation */}
+      <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-600 rounded-lg text-white shadow-sm shadow-blue-500/20">
+              <FileSpreadsheet className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-bold tracking-tight">Insta Quote AI</h1>
+                <span className="text-[10px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                  Takeoff Engine
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Auditable Takeoff with Evidence Tracing & Refusal Containment
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 rounded-full font-medium border border-emerald-200 dark:border-emerald-900/50">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              Never Guesses Numbers
+            </span>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
+        {/* Intro Guidance */}
+        {!result && !isLoading && (
+          <div className="text-center max-w-2xl mx-auto space-y-2 pt-4">
+            <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              Deterministic PDF Line Item Takeoff
+            </h2>
+            <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              Upload invoices, delivery dockets, or consolidated trade statements. Every quantity and price carries auditable evidence, and ambiguities or contradictions produce explicit, plain-language refusals.
+            </p>
+          </div>
+        )}
+
+        {/* Upload Zone */}
+        <section className="max-w-2xl mx-auto w-full">
+          <FileUpload onFileSelect={handleUpload} isLoading={isLoading} />
+        </section>
+
+        {/* Specific API Error Banner */}
+        {apiError && (
+          <section className="max-w-2xl mx-auto w-full">
+            <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 space-y-1.5 shadow-sm">
+              <div className="flex items-center gap-2 text-red-800 dark:text-red-300 font-semibold text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                <span>{apiError.error}</span>
+              </div>
+              <p className="text-xs text-red-700 dark:text-red-300/90 pl-6 leading-relaxed">
+                {apiError.detail}
+              </p>
+            </div>
+          </section>
+        )}
+
+        {/* Loading Progress State */}
+        {isLoading && (
+          <section className="max-w-3xl mx-auto w-full">
+            <LoadingState />
+          </section>
+        )}
+
+        {/* Results Presentation Area */}
+        {result && (
+          <section className="space-y-6 animate-in fade-in duration-300">
+            {/* Action Bar */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Takeoff Audit Report
+              </h3>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-2xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Upload Another Document
+              </button>
+            </div>
+
+            {/* Document Metadata Card */}
+            <DocumentInfo
+              fileName={result.fileName}
+              totalPages={result.totalPages}
+              metadata={result.metadata}
+              processingTimeMs={result.processingTimeMs}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+
+            {/* Refusal Reporting (Prominently displayed before table to highlight issues) */}
+            <RefusalList refusals={result.refusals} />
+
+            {/* Extracted Line Items Table with Evidence Viewer */}
+            <LineItemsTable items={result.extractedItems} totals={result.totals} />
+          </section>
+        )}
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-200 dark:border-zinc-800 py-6 mt-auto bg-white dark:bg-zinc-950">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+          <p>
+            Built for the Insta Quote AI Take-Home Assessment. Powered by TypeScript & Next.js.
+          </p>
+          <div className="flex items-center gap-4">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              Deterministic Rule Engine
+            </span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
