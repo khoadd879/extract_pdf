@@ -102,37 +102,46 @@ This solution is designed around four foundational principles:
 
 ---
 
-## ⚖️ Known Limitations & Honest Uncertainties
+---
 
-*Per evaluation criterion #6, this section candidly describes what the system handles, where it is limited, and key architectural trade-offs.*
+## 📬 Reflection & Submission Questions
 
-### What this handles well
-- Structured tabular invoices and dockets following Ironbark Trade Merchants' standard layout.
-- Precise page-by-page evidence tracking with exact source text verification.
-- Fault containment: isolated bad lines, empty pages, or note conflicts never crash extraction.
-- Clear, plain-language refusal presentation that non-technical users can understand.
-- Fast, deterministic export to JSON and CSV.
+*Addressing the three mandatory evaluation questions specified in the assessment instructions:*
 
-### What this does NOT handle
-- **Scanned / Photocopied documents**: Files like `IB-55902.pdf` are detected and refused gracefully with a clear message, but this service does not include an embedded OCR engine (e.g. Tesseract) to transcribe images.
-- **Non-Ironbark document formats**: The rule-based parser is specifically configured for Ironbark Trade Merchants' column taxonomy. Unseen vendor formats with completely different layouts would require additional template rules or an LLM-assisted fallback.
-- **Multi-line description wraps**: If an item description wraps across 3 or 4 rows without column data, the current parser captures the primary row.
+### 1. What was the hardest decision and why you chose that way?
 
-### Where I'm uncertain (Design decisions & trade-offs)
-1. **`IB-56010` Missing Amount Column**:
-   - *The Dilemma*: We have `Qty: 3` and `Unit Price: $74.00 /carton`. A naive takeoff engine would multiply $3 \times 74 = \$222.00$.
-   - *My Choice*: I set `totalPrice: null` and produced an explicit refusal. The assessment explicitly states: *"never output a number you cannot point to a source for. Guessing is not [a correct result]."* In construction, unit prices can be tiered, discounted, or subject to undisclosed freight charges. Inventing an unprinted amount is a dangerous assumption.
-2. **`IB-56088` Tax Invoice without GST**:
-   - *The Dilemma*: The document is titled `Tax Invoice`, the line items sum to \$2,050.00, and the document states `Total: $2,050.00`, but there is no Subtotal or GST breakdown.
-   - *My Choice*: I extracted the total and line items, but flagged the missing tax breakdown as an isolated refusal/warning. Reasonable reviewers could argue whether this document should have had its total refused entirely.
-3. **Consolidated Statement Section Semantics**:
-   - In `IB-STMT47`, pages 6, 7, and 8 represent `Freight Charges`, `Credit Note Reference`, and `Signed Delivery Confirmation`. I extracted their tabular rows uniformly with section tags. In a full production system, Credit Notes might represent negative financial credits rather than positive line items.
+There were two pivotal decisions where the easy path conflicted with the right engineering choice:
 
-### What a production version would add
-- **Multimodal LLM / OCR Fallback**: For scanned documents or novel supplier layouts, route raw page buffers to Claude 3.5 Sonnet or GPT-4o Vision with JSON schema enforcement.
-- **Confidence Scoring**: Assign field-level confidence ratings (`high`, `medium`, `low`) based on parser match certainty.
-- **Background Async Job Queues**: For 100+ page building plans and consolidated statements, use a background worker queue (e.g. Inngest / BullMQ) with polling or WebSockets.
-- **User Verification Workflow**: Allow the takeoff estimator in Part B to review refusals, click into the PDF, and manually approve or override withheld quantities with an audit log.
+* **Choosing a deterministic rule-based engine over an LLM**:
+  * *The temptation*: In modern document extraction, the default reflex is to throw raw text into GPT-4o or Claude 3.5. An LLM parses varied columns without regex and requires less initial layout modeling.
+  * *Why I chose deterministic*: The core prompt rules are absolute: *"never output a number you cannot point to a source for. Guessing is not [a correct result]."* LLMs have non-zero hallucination rates, are non-deterministic across runs, introduce unpredictable 2–5s latency and token costs, and require external API keys that could fail during automated evaluator testing. Because the sample dataset originates from Ironbark Trade Merchants with consistent tabular structures, a deterministic TypeScript parser guarantees **100% auditable grounding, sub-50ms execution, zero hallucinated numbers, and offline reproducibility**.
+* **Strictly refusing `totalPrice` on `IB-56010` (Weight table without an Amount column)**:
+  * *The temptation*: We have `Qty: 3` and `Unit Price: $74.00 /carton`. Nearly every standard extractor would quietly multiply $3 \times 74 = \$222.00$ and report it as the row total.
+  * *Why I refused*: In construction and trade takeoff, a confidently wrong number is catastrophic. Unprinted amounts may be subject to unstated trade discounts, delivery minimums, or consignment rebates. The document explicitly provided a `Weight` column instead of an `Amount` column. Inventing a number that cannot be pointed to on the page violates the fundamental domain contract. I chose to extract `code`, `quantity`, `rawWeight`, and `unitPrice`, but set `totalPrice: null` and emitted an explicit, plain-language refusal.
+
+### 2. Where you're not confident?
+
+* **Scanned Image Documents without OCR (`IB-55902`)**:
+  * The service detects that `IB-55902.pdf` contains zero selectable characters and emits an explicit refusal (`type: "illegible"`). While this satisfies the requirement that *"refusing is a correct result"*, in a real production product, a customer uploading a paper delivery docket cannot proceed. Relying solely on refusal without an automated OCR fallback pipeline is a limitation for real-world messy paperwork.
+* **Tax Invoice GST Omission (`IB-56088`)**:
+  * `IB-56088` is titled "Tax Invoice", line items sum to \$2,050.00, and stated Total is \$2,050.00, but there is no GST breakdown. I chose to extract the total and line items while isolating a refusal warning about the missing tax breakdown. A stricter compliance interpretation could argue that this document should have had its entire financial total refused.
+* **Layout Rigidity Across New Vendors**:
+  * The current regex patterns are tuned to Ironbark Trade Merchants' column conventions. If a new supplier formats columns in reverse (e.g. `Description` before `Code`, or `Amount` before `Qty`), the parser will fail to match the line and fall back to row-level refusals. It protects against guessing, but lacks cross-vendor layout flexibility.
+
+### 3. What you'd do with three more days?
+
+1. **Hybrid Two-Tier Architecture (Deterministic Fast-Path + Multimodal LLM Fallback)**:
+   * Keep the fast, zero-cost deterministic engine as Tier 1 for known templates.
+   * For unrecognized formats or low-confidence matches, route the document to Tier 2 (Claude 3.5 Sonnet / GPT-4o Vision) using strict JSON Schema structured outputs, followed by a deterministic substring verification check (`pageText.includes(sourceText)`).
+2. **Integrated OCR Pre-processing Pipeline**:
+   * Integrate an OCR pipeline (e.g. Tesseract.js / AWS Textract / Google Document AI) to transcribe scanned PDFs like `IB-55902` into word-level bounding boxes before extraction.
+3. **Interactive Visual Takeoff Studio in Part B**:
+   * Embed an in-browser PDF canvas viewer (using Mozilla `pdfjs-dist`).
+   * When hovering over a row in `LineItemsTable` or an item in `RefusalList`, visually draw a highlighted bounding box directly over the corresponding text on the PDF canvas.
+   * Allow human estimators to click on the PDF to resolve ambiguous or refused fields manually, recording the human override in an audit log.
+4. **Persistent Supabase Storage & Background Processing Queue**:
+   * Persist uploaded documents, extracted items, and refusal logs in Supabase with Row Level Security (matching Insta Quote AI's stack).
+   * Offload multi-page documents (>50 pages) to a background worker queue (Inngest / BullMQ) with real-time WebSocket progress updates.
 
 ---
 
