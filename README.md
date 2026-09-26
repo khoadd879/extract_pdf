@@ -2,7 +2,7 @@
 
 > An auditable, deterministic document takeoff service and interactive web interface built for construction and trade invoices, packing lists, and delivery dockets. Built with **TypeScript**, **Next.js 16 (App Router)**, **Tailwind CSS**, and **Vitest**.
 
-🔗 **Live Demo:** [https://extract-pdf.vercel.app](https://extract-pdf.vercel.app) *(or your deployed Vercel URL)*  
+🔗 **Live Demo:** [https://extract-pdf.vercel.app](https://extract-pdf.vercel.app)
 📦 **Repository:** [https://github.com/khoadd879/extract_pdf](https://github.com/khoadd879/extract_pdf)
 
 ---
